@@ -1,0 +1,290 @@
+---
+title: "HW2"
+author: "Ziyuan(Esther) Yan"
+date: "4/14/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(readr)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+# NY_property_data <- read_csv("NY property data.csv")
+```
+
+```{r}
+# saveRDS(NY_property_data, file = "NY_property_data.rds")
+```
+
+```{r}
+NY_property_data <- readRDS("~/git/Fraud Analytics/HW2/NY_property_data.rds")
+```
+
+```{r}
+clean_data <- NY_property_data
+```
+
+```{r}
+# ZIP5
+clean_data <- clean_data %>%
+  rename(ZIP5 = ZIP)
+```
+
+```{r}
+boro_mean <- clean_data %>%
+  group_by(B) %>%
+  summarise_all("mean")
+```
+
+```{r}
+# fill in missing values in FULLVAL
+for (i in 1:5) {
+  index <- clean_data$FULLVAL == 0 & clean_data$B == i
+  clean_data$FULLVAL[index] <- boro_mean$FULLVAL[i]
+}
+```
+
+```{r}
+# fill in missing values in AVLAND
+for (i in 1:5) {
+  index <- clean_data$AVLAND == 0 & clean_data$B == i
+  clean_data$AVLAND[index] <- boro_mean$AVLAND[i]
+}
+```
+
+```{r}
+# fill in missing values in AVTOT
+for (i in 1:5) {
+  index <- clean_data$AVTOT == 0 & clean_data$B == i
+  clean_data$AVTOT[index] <- boro_mean$AVTOT[i]
+}
+```
+
+```{r}
+# fill in missing values in ZIP5 using the most frequent value in each boro
+mode_ZIP5 <- clean_data %>%
+  group_by(B, ZIP5) %>%
+  summarise(ZIP_count = n()) %>%
+  group_by(B) %>%
+  filter(ZIP_count == max(ZIP_count))
+
+for (i in 1:5) {
+  index <- is.na(clean_data$ZIP5) & clean_data$B == i
+  clean_data$ZIP5[index] <- mode_ZIP5$ZIP5[i]
+}
+```
+
+```{r}
+# create ZIP3
+clean_data$ZIP3 <- as.numeric(substr(clean_data$ZIP5, 0, 3))
+```
+
+```{r}
+# fill in missing values in STORIES using the most frequent value in each boro
+mode_STORIES <- clean_data %>%
+  group_by(B, STORIES) %>%
+  summarise(STORIES_count = n()) %>%
+  group_by(B) %>%
+  filter(STORIES_count == max(STORIES_count))
+
+for (i in 1:5) {
+  index <- is.na(clean_data$STORIES) & clean_data$B == i
+  clean_data$STORIES[index] <- mode_STORIES$STORIES[i]
+}
+```
+
+```{r}
+# fill in missing values in LTFRONT
+for (i in 1:5) {
+  index <- clean_data$LTFRONT == 0 & clean_data$B == i
+  clean_data$LTFRONT[index] <- boro_mean$LTFRONT[i]
+}
+```
+
+```{r}
+# fill in missing values in LTDEPTH
+for (i in 1:5) {
+  index <- clean_data$LTDEPTH == 0 & clean_data$B == i
+  clean_data$LTDEPTH[index] <- boro_mean$LTDEPTH[i]
+}
+```
+
+```{r}
+# fill in missing values in BLDFRONT
+for (i in 1:5) {
+  index <- clean_data$BLDFRONT == 0 & clean_data$B == i
+  clean_data$BLDFRONT[index] <- boro_mean$BLDFRONT[i]
+}
+```
+
+```{r}
+# fill in missing values in BLDDEPTH
+for (i in 1:5) {
+  index <- clean_data$BLDDEPTH == 0 & clean_data$B == i
+  clean_data$BLDDEPTH[index] <- boro_mean$BLDDEPTH[i]
+}
+```
+
+```{r}
+# 3 sizes
+clean_data["S1"] <- clean_data["LTFRONT"] * clean_data["LTDEPTH"] # LT area
+S1 <- clean_data["S1"]
+
+clean_data["S2"] <- clean_data["BLDFRONT"] * clean_data["BLDDEPTH"] # BLD area
+S2 <- clean_data["S2"]
+
+clean_data["S3"] <- S2 * clean_data["STORIES"] # BLD volumn
+S3 <- clean_data["S3"]
+```
+
+```{r}
+# 3 variables
+V1 <- clean_data["FULLVAL"]
+V2 <- clean_data["AVLAND"]
+V3 <- clean_data["AVTOT"]
+```
+
+```{r}
+# 9 ratios
+clean_data["r1"] <- V1 / S1 # FULLVAL per LT area
+r1 <- clean_data["r1"]
+
+clean_data["r2"] <- V1 / S2 # FULLVAL per BLD area
+r2 <- clean_data["r2"]
+
+clean_data["r3"] <- V1 / S3 # FULLVAL per BLD volumn
+r3 <- clean_data["r3"]
+
+clean_data["r4"] <- V2 / S1
+r4 <- clean_data["r4"]
+
+clean_data["r5"] <- V2 / S2
+r5 <- clean_data["r5"]
+
+clean_data["r6"] <- V2 / S3
+r6 <- clean_data["r6"]
+
+clean_data["r7"] <- V3 / S1
+r7 <- clean_data["r7"]
+
+clean_data["r8"] <- V3 / S2
+r8 <- clean_data["r8"]
+
+clean_data["r9"] <- V3 / S3
+r9 <- clean_data["r9"]
+```
+
+```{r}
+clean_data <- clean_data %>%
+  group_by(ZIP5) %>%
+  mutate(zip5_fullvalue_lotarea = r1/mean(r1),
+         zip5_fullvalue_bldarea = r2/mean(r2),
+         zip5_fullvalue_bldvol = r3/mean(r3),
+         zip5_avland_lotarea = r4/mean(r4),
+         zip5_avland_bldarea = r5/mean(r5),
+         zip5_avland_bldvol = r6/mean(r6),
+         zip5_avtot_lotarea = r7/mean(r7),
+         zip5_avtot_bldarea = r8/mean(r8),
+         zip5_avtot_bldvol = r9/mean(r9))
+
+clean_data <- clean_data %>%
+  group_by(ZIP3) %>%
+  mutate(zip3_fullvalue_lotarea = r1/mean(r1),
+         zip3_fullvalue_bldarea = r2/mean(r2),
+         zip3_fullvalue_bldvol = r3/mean(r3),
+         zip3_avland_lotarea = r4/mean(r4),
+         zip3_avland_bldarea = r5/mean(r5),
+         zip3_avland_bldvol = r6/mean(r6),
+         zip3_avtot_lotarea = r7/mean(r7),
+         zip3_avtot_bldarea = r8/mean(r8),
+         zip3_avtot_bldvol = r9/mean(r9))
+
+clean_data <- clean_data %>%
+  group_by(TAXCLASS) %>%
+  mutate(taxclass_fullvalue_lotarea = r1/mean(r1),
+         taxclass_fullvalue_bldarea = r2/mean(r2),
+         taxclass_fullvalue_bldvol = r3/mean(r3),
+         taxclass_avland_lotarea = r4/mean(r4),
+         taxclass_avland_bldarea = r5/mean(r5),
+         taxclass_avland_bldvol = r6/mean(r6),
+         taxclass_avtot_lotarea = r7/mean(r7),
+         taxclass_avtot_bldarea = r8/mean(r8),
+         taxclass_avtot_bldvol = r9/mean(r9))
+
+clean_data <- clean_data %>%
+  group_by(B) %>%
+  mutate(boro_fullvalue_lotarea = r1/mean(r1),
+         boro_fullvalue_bldarea = r2/mean(r2),
+         boro_fullvalue_bldvol = r3/mean(r3),
+         boro_avland_lotarea = r4/mean(r4),
+         boro_avland_bldarea = r5/mean(r5),
+         boro_avland_bldvol = r6/mean(r6),
+         boro_avtot_lotarea = r7/mean(r7),
+         boro_avtot_bldarea = r8/mean(r8),
+         boro_avtot_bldvol = r9/mean(r9))
+
+clean_data <- clean_data %>%
+  mutate(all_fullvalue_lotarea = r1/mean(r1),
+         all_fullvalue_bldarea = r2/mean(r2),
+         all_fullvalue_bldvol = r3/mean(r3),
+         all_avland_lotarea = r4/mean(r4),
+         all_avland_bldarea = r5/mean(r5),
+         all_avland_bldvol = r6/mean(r6),
+         all_avtot_lotarea = r7/mean(r7),
+         all_avtot_bldarea = r8/mean(r8),
+         all_avtot_bldvol = r9/mean(r9))
+```
+
+```{r include=FALSE, eval=FALSE}
+func <- function(var) {
+  print(paste0('mean', str(mean(var))))
+  print(paste0('sd', str(sd(var))))
+  print(paste0('min', str(min(var))))
+  print(paste0('max', str(max(var))))
+}
+
+func(clean_data$zip5_avland_bldarea)
+```
+
+```{r}
+var <- clean_data %>%
+  select(46:90)
+
+var <- subset(var, select = -c(B))
+
+write.csv(var, file = "45_vars.csv")
+```
+
+
+
+
+
+```{r include=FALSE, eval=FALSE}
+group_table <- function(group, context) {
+  df_group <- df_addzip %>%
+    group_by(!!group) %>%
+    mutate(
+      !!(paste0(context, "fullvalue_lotarea")) := r1 / mean(r1),
+      !!(paste0(context, "fullvalue_bldarea")) := r2 / mean(r2),
+      !!(paste0(context, "fullvalue_bldvol")) := r3 / mean(r3),
+      !!(paste0(context, "avland_lotarea")) := r4 / mean(r4),
+      !!(paste0(context, "avland_bldarea")) := r5 / mean(r5),
+      !!(paste0(context, "avland_bldvol")) := r6 / mean(r6),
+      !!(paste0(context, "avtot_lotarea")) := r7 / mean(r7),
+      !!(paste0(context, "avtot_bldarea")) := r8 / mean(r8),
+      !!(paste0(context, "avtot_bldvol")) := r9 / mean(r9)
+    ) %>%
+    ungroup()
+  return(df_group)
+}
+```
